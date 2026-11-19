@@ -1,13 +1,16 @@
 ﻿# Compile en Release puis prépare dist\ : les DLL à copier dans plugins\, le zip et le manifest.json
 # d'un dépôt d'extensions. -UrlZip = adresse où le zip sera servi (dépôt d'extensions uniquement).
-param([string]$UrlZip = "http://ADRESSE_A_REMPLACER/jellyfin-ha-mqtt_1.0.0.0.zip")
+param(
+    [string]$UrlZip = "http://ADRESSE_A_REMPLACER/jellyfin-ha-mqtt.zip",
+    [string]$Changelog = "Un topic MQTT par capteur (jellyfin/<id>/<champ>/state), publication du seul champ modifié."
+)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 dotnet build Jellyfin.Plugin.HaMqtt\Jellyfin.Plugin.HaMqtt.csproj -c Release
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-$version = "1.0.0.0"
+$version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version  # seule source de la version
 $dist = "dist"
 $dossier = "$dist\HomeAssistantMqtt_$version"
 Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
@@ -30,7 +33,7 @@ $manifest = @(
         versions    = @(
             [ordered]@{
                 version   = $version
-                changelog = "Première version."
+                changelog = $Changelog
                 targetAbi = "12.4.0.0"
                 sourceUrl = $UrlZip
                 checksum  = $md5

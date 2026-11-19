@@ -1,7 +1,7 @@
 ---
 name: "Home Assistant MQTT"
 guid: "a757374b-70ab-405b-82ad-bfb8817d3271"
-version: "1.0.0.0"
+version: "1.1.0.0"
 targetAbi: "12.4.0.0"
 framework: "net10.0"
 overview: "Publie l'état de Jellyfin dans Home Assistant par MQTT"
@@ -14,4 +14,4 @@ artifacts:
 - "Jellyfin.Plugin.HaMqtt.dll"
 - "MQTTnet.dll"
 changelog: >
-  Première version.
+  Un topic MQTT par capteur (jellyfin/<id>/<champ>/state), publication du seul champ modifié.

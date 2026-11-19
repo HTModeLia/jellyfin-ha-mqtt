@@ -33,8 +33,8 @@ Cible : **Jellyfin 12.4.0** (.NET 10, `targetAbi` 12.4.0.0).
 
 Produit dans `dist\` :
 
-- `HomeAssistantMqtt_1.0.0.0\` : `Jellyfin.Plugin.HaMqtt.dll` et `MQTTnet.dll` (installation manuelle) ;
-- `jellyfin-ha-mqtt_1.0.0.0.zip` et `manifest.json` (dépôt d'extensions).
+- `HomeAssistantMqtt_<version>\` : `Jellyfin.Plugin.HaMqtt.dll` et `MQTTnet.dll` (installation manuelle) ;
+- `jellyfin-ha-mqtt_<version>.zip` et `manifest.json` (dépôt d'extensions).
 
 Tests (logique de découverte, sans broker) : `dotnet test`.
 
@@ -42,7 +42,7 @@ Tests (logique de découverte, sans broker) : `dotnet test`.
 
 ### Copie manuelle (le plus simple)
 
-1. Copier le dossier `dist\HomeAssistantMqtt_1.0.0.0` (les **deux** DLL) dans le dossier `plugins` des données
+1. Copier le dossier `dist\HomeAssistantMqtt_<version>` (les **deux** DLL) dans le dossier `plugins` des données
    de Jellyfin :
    - Docker : `/config/plugins/` (le volume monté sur `/config`) ;
    - Debian/Ubuntu : `/var/lib/jellyfin/plugins/` ;
@@ -55,15 +55,15 @@ Tests (logique de découverte, sans broker) : `dotnet test`.
    `https://raw.githubusercontent.com/HTModeLia/jellyfin-ha-mqtt/main/manifest.json`
 2. *Catalogue* → « Home Assistant MQTT » → Installer, puis redémarrer Jellyfin.
 
-Publier une version : `.\empaqueter.ps1 -UrlZip https://github.com/HTModeLia/jellyfin-ha-mqtt/releases/download/v<version>/jellyfin-ha-mqtt_<version>.zip`,
+Publier une version : changer `<Version>` dans `Directory.Build.props` (et `build.yaml`), puis `.\empaqueter.ps1 -UrlZip https://github.com/HTModeLia/jellyfin-ha-mqtt/releases/download/v<version>/jellyfin-ha-mqtt_<version>.zip`,
 copier `dist\manifest.json` à la racine, commiter, pousser, puis créer la release `v<version>` avec **ce** zip
 (`dist\jellyfin-ha-mqtt_<version>.zip`) : relancer le script change la somme MD5 du zip.
 
 ### Dépôt d'extensions hébergé ailleurs
 
-1. Servir `jellyfin-ha-mqtt_1.0.0.0.zip` et `manifest.json` sur un serveur web joignable par Jellyfin.
+1. Servir `jellyfin-ha-mqtt_<version>.zip` et `manifest.json` sur un serveur web joignable par Jellyfin.
 2. Régénérer le manifest avec la bonne adresse du zip (la somme MD5 y est recalculée) :
-   `.\empaqueter.ps1 -UrlZip http://<serveur>/jellyfin-ha-mqtt_1.0.0.0.zip`
+   `.\empaqueter.ps1 -UrlZip http://<serveur>/jellyfin-ha-mqtt_<version>.zip`
 3. *Tableau de bord → Extensions → Dépôts* : ajouter l'URL de `manifest.json`, puis installer
    « Home Assistant MQTT » depuis le catalogue et redémarrer Jellyfin.
 
