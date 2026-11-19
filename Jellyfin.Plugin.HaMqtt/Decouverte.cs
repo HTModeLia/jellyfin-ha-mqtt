@@ -33,7 +33,7 @@ public static class Decouverte
     };
 
     /// <summary>Entité HA : Champ donne son topic d'état (<see cref="EtatTopic"/>) ; unique_id et topic de découverte inchangés.</summary>
-    public sealed record Entite(string Composant, string Champ, string Nom, string Icone, string? Unite = null);
+    public sealed record Entite(string Composant, string Champ, string Nom, string Icone, string? Unite = null, string? Classe = null);
 
     /// <summary>Signal de vie : tous les champs republiés même sans changement.</summary>
     public const int SignalDeVie = 1800;
@@ -43,7 +43,8 @@ public static class Decouverte
 
     public static readonly Entite[] Fixes =
     [
-        new("binary_sensor", "serveur", "Serveur", "mdi:server-network"),
+        new("binary_sensor", "serveur", "Serveur", "mdi:server-network", Classe: "connectivity"),
+        new("binary_sensor", "redemarrage_requis", "Redémarrage requis", "mdi:restart-alert", Classe: "update"),
         new("sensor", "version", "Version", "mdi:information-outline"),
         new("sensor", "lectures_en_cours", "Lectures en cours", "mdi:play-network"),
         new("sensor", "derniere_lecture", "Dernière lecture", "mdi:play-circle"),
@@ -80,13 +81,17 @@ public static class Decouverte
                 ["sw_version"] = version,
             },
         };
-        if (e.Composant == "binary_sensor")
+        if (e.Classe is not null)
+        {
+            conf["device_class"] = e.Classe;
+        }
+
+        if (e.Champ == "serveur")
         {
             // « Serveur » : lit directement la dispo, pour rester affiché « Déconnecté » (et non indisponible) quand Jellyfin s'arrête
             conf["state_topic"] = Dispo(id);
             conf["payload_on"] = "online";
             conf["payload_off"] = "offline";
-            conf["device_class"] = "connectivity";
             return JsonSerializer.Serialize(conf);
         }
 

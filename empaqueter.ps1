@@ -2,7 +2,7 @@
 # d'un dépôt d'extensions. -UrlZip = adresse où le zip sera servi (dépôt d'extensions uniquement).
 param(
     [string]$UrlZip = "http://ADRESSE_A_REMPLACER/jellyfin-ha-mqtt.zip",
-    [string]$Changelog = "Un topic MQTT par capteur (jellyfin/<id>/<champ>/state), publication du seul champ modifié."
+    [string]$Changelog = "Capteur « Redémarrage requis » : passe à ON quand Jellyfin attend un redémarrage (extension installée ou mise à jour)."
 )
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -32,7 +32,7 @@ $manifest = @(
         guid        = "a757374b-70ab-405b-82ad-bfb8817d3271"
         name        = "Home Assistant MQTT"
         overview    = "Publie l'état de Jellyfin dans Home Assistant par MQTT"
-        description = "Appareil « Jellyfin » dans Home Assistant (découverte MQTT) : compteurs par bibliothèque, lectures en cours, dernière lecture, dernier ajout, CPU et RAM."
+        description = "Appareil « Jellyfin » dans Home Assistant (découverte MQTT) : compteurs par bibliothèque, lectures en cours, dernière lecture, dernier ajout, redémarrage requis, CPU et RAM."
         owner       = "aurelien"
         category    = "General"
         imageUrl    = "https://raw.githubusercontent.com/HTModeLia/jellyfin-ha-mqtt/main/image.png"

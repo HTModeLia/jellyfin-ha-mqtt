@@ -29,6 +29,7 @@ public sealed class PublieurMqtt : BackgroundService
 
     private readonly ILibraryManager _bibliotheque;
     private readonly ISessionManager _sessions;
+    private readonly IServerApplicationHost _hote;
     private readonly ILogger<PublieurMqtt> _log;
     private readonly string _version;
     private readonly string _id;
@@ -48,10 +49,12 @@ public sealed class PublieurMqtt : BackgroundService
     {
         _bibliotheque = bibliotheque;
         _sessions = sessions;
+        _hote = hote;
         _log = log;
         _version = hote.ApplicationVersionString;
         _id = Decouverte.Identifiant(hote.SystemId);
         _etat["version"] = _version;
+        _etat["redemarrage_requis"] = hote.HasPendingRestart;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -59,6 +62,7 @@ public sealed class PublieurMqtt : BackgroundService
         _sessions.PlaybackStart += SurLecture;
         _sessions.PlaybackStopped += SurArret;
         _bibliotheque.ItemAdded += SurAjout;
+        _hote.HasPendingRestartChanged += SurRedemarrageRequis;
         Plugin.Instance!.ConfigurationChanged += SurReglages;
         var prochainComptage = DateTime.MinValue;
         var prochainSignal = DateTime.UtcNow + TimeSpan.FromSeconds(Decouverte.SignalDeVie);
@@ -109,6 +113,7 @@ public sealed class PublieurMqtt : BackgroundService
             _sessions.PlaybackStart -= SurLecture;
             _sessions.PlaybackStopped -= SurArret;
             _bibliotheque.ItemAdded -= SurAjout;
+            _hote.HasPendingRestartChanged -= SurRedemarrageRequis;
             Plugin.Instance.ConfigurationChanged -= SurReglages;
             await DeconnecterAsync().ConfigureAwait(false);
         }
@@ -250,6 +255,9 @@ public sealed class PublieurMqtt : BackgroundService
         var client = $"{e.ClientName} ({e.DeviceName})" + (string.IsNullOrEmpty(qui) ? "" : $" - {qui}");
         Signaler(("derniere_lecture", Titre(e.Item)), ("derniere_lecture_client", client), ("lectures_en_cours", LecturesEnCours()));
     }
+
+    // Extension installée ou mise à jour (catalogue, tâche planifiée), réglage serveur… : Jellyfin attend un redémarrage
+    private void SurRedemarrageRequis(object? sender, EventArgs e) => Signaler(("redemarrage_requis", _hote.HasPendingRestart));
 
     private void SurArret(object? sender, PlaybackStopEventArgs e) => Signaler(("lectures_en_cours", LecturesEnCours()));
 

@@ -79,6 +79,19 @@ public class ServeurEtVersionTests
     }
 
     [Fact]
+    public void Redemarrage_requis_binaire_sur_son_topic_d_etat()
+    {
+        var entite = Decouverte.Fixes.Single(e => e.Champ == "redemarrage_requis");
+        Assert.Equal("homeassistant/binary_sensor/jellyfin/redemarrage_requis/config", Decouverte.Topic(entite));
+
+        var conf = JsonDocument.Parse(Decouverte.Config(entite, "12.4.0", Id)).RootElement;
+        Assert.Equal($"jellyfin/{Id}/redemarrage_requis/state", conf.GetProperty("state_topic").GetString());
+        Assert.Equal("update", conf.GetProperty("device_class").GetString());
+        Assert.Equal($"jellyfin/{Id}/availability", conf.GetProperty("availability_topic").GetString());
+        Assert.False(conf.TryGetProperty("payload_on", out _)); // ON / OFF par défaut, comme Decouverte.Valeur(bool)
+    }
+
+    [Fact]
     public void Version_lit_l_etat_et_expire_apres_deux_signaux_de_vie()
     {
         var conf = JsonDocument.Parse(Decouverte.Config(Decouverte.Fixes.Single(e => e.Champ == "version"), "12.4.0", Id)).RootElement;

@@ -88,6 +88,7 @@ prévoir un compte Mosquitto dédié.
 |----------------------------|---------------------------|----------------------------------|
 | Serveur (connectivité)     | `serveur`                 | `availability` (online/offline) |
 | Version                    | `version`                 | au démarrage                     |
+| Redémarrage requis         | `redemarrage_requis`      | dès que Jellyfin l'attend        |
 | *Nom de la bibliothèque*   | `bib_<nom>`               | toutes les 5 min                 |
 | Lectures en cours          | `lectures_en_cours`       | lecture, arrêt, 5 min            |
 | Dernière lecture           | `derniere_lecture`        | début de lecture                 |
@@ -107,4 +108,7 @@ prévoir un compte Mosquitto dédié.
   La version figure aussi dans la fiche de l'appareil (`sw_version`).
 - **CPU** : part du processus Jellyfin sur l'ensemble des cœurs (100 % = tous les cœurs pleins), arrondie à 1 % ;
   absent au premier relevé. **RAM** arrondie à 10 Mo. Ces arrondis évitent d'envoyer un état pour un écart insignifiant.
+- **Redémarrage requis** : `ON` quand Jellyfin attend un redémarrage, par exemple après l'installation ou la mise à
+  jour d'une extension (catalogue ou tâche planifiée « Mettre à jour les extensions »). Jellyfin ne redémarre jamais
+  seul. Repasse à `OFF` au redémarrage.
 - Les états texte sont limités à 255 caractères (limite de HA).
