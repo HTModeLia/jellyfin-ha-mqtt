@@ -21,6 +21,12 @@ $zip = "$dist\jellyfin-ha-mqtt_$version.zip"
 Compress-Archive "$dossier\*" $zip
 $md5 = (Get-FileHash $zip -Algorithm MD5).Hash.ToLower()
 
+# Versions déjà publiées (manifest.json à la racine) : gardées pour l'historique des versions dans Jellyfin
+$precedentes = @()
+if (Test-Path manifest.json) {
+    $precedentes = @((Get-Content manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json)[0].versions | Where-Object { $_.version -ne $version })
+}
+
 $manifest = @(
     [ordered]@{
         guid        = "a757374b-70ab-405b-82ad-bfb8817d3271"
@@ -39,7 +45,7 @@ $manifest = @(
                 checksum  = $md5
                 timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             }
-        )
+        ) + $precedentes
     }
 )
 # -InputObject : sinon PowerShell 5.1 « déroule » le tableau à un seul élément
