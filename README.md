@@ -86,7 +86,7 @@ prévoir un compte Mosquitto dédié.
 
 | Capteur                    | Champ                     | Mise à jour                      |
 |----------------------------|---------------------------|----------------------------------|
-| Serveur (connectivité)     | `serveur`                 | `jellyfin/dispo` (online/offline)|
+| Serveur (connectivité)     | `serveur`                 | `availability` (online/offline) |
 | Version                    | `version`                 | au démarrage                     |
 | *Nom de la bibliothèque*   | `bib_<nom>`               | toutes les 5 min                 |
 | Lectures en cours          | `lectures_en_cours`       | lecture, arrêt, 5 min            |
