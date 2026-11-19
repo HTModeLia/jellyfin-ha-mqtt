@@ -4,13 +4,24 @@ Publie un appareil **« Jellyfin »** dans Home Assistant par MQTT, avec la déc
 HA crée tout seul l'appareil et ses capteurs, sans YAML ni polling. Indépendant du proxy de streaming.
 
 - Messages de découverte retenus sur `homeassistant/sensor/jellyfin/<champ>/config`.
-- État : un JSON retenu sur `jellyfin/etat`, publié **seulement quand il change** (lecture, arrêt, ajout, ou
-  compteurs recalculés en local toutes les 5 minutes et différents du dernier envoi).
-- Signal de vie : l'état complet est republié toutes les 30 minutes, même sans changement. Les capteurs ont
+- État : un topic retenu par champ, `jellyfin/<id>/<champ>/state`, avec la valeur brute (texte, nombre,
+  booléen en `ON` / `OFF`). `<id>` est l'identifiant du serveur (ServerId sans tirets). Un champ n'est publié
+  **que quand sa valeur change** (lecture, arrêt, ajout, ou compteurs recalculés en local toutes les 5 minutes).
+- Signal de vie : tous les champs sont republiés toutes les 30 minutes, même sans changement. Les capteurs ont
   `expire_after` = 4000 s : si Jellyfin se fige sans couper la connexion MQTT, HA les passe en indisponible.
-- Disponibilité : `jellyfin/dispo` = `online` à la connexion ; `offline` (message de dernière volonté, retenu)
-  si Jellyfin s'arrête ou plante. Keepalive MQTT de 60 s. Reconnexion automatique toutes les 10 secondes si le
-  broker tombe.
+- Disponibilité : `jellyfin/<id>/availability` = `online` à la connexion ; `offline` (message de dernière
+  volonté, retenu) si Jellyfin s'arrête ou plante. Keepalive MQTT de 60 s. Reconnexion automatique toutes les
+  10 secondes si le broker tombe.
+- Les anciens topics `jellyfin/etat` et `jellyfin/dispo` (version 1.0.0.0) sont vidés à la connexion.
+
+Exemple sur le broker :
+
+```
+jellyfin/508673e842f94630ada5c59699689459/availability = online
+jellyfin/508673e842f94630ada5c59699689459/version/state = 12.4.0
+jellyfin/508673e842f94630ada5c59699689459/lectures_en_cours/state = 1
+jellyfin/508673e842f94630ada5c59699689459/bib_films/state = 842
+```
 
 Cible : **Jellyfin 12.4.0** (.NET 10, `targetAbi` 12.4.0.0).
 

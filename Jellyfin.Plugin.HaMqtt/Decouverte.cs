@@ -11,13 +11,31 @@ namespace Jellyfin.Plugin.HaMqtt;
 public static class Decouverte
 {
     public const string Base = "jellyfin";
-    public const string Dispo = Base + "/dispo";
-    public const string Etat = Base + "/etat";
 
-    /// <summary>Entité HA : Champ est la clé du JSON publié sur <see cref="Etat"/>.</summary>
+    /// <summary>Anciens topics (JSON unique) : vidés à la connexion pour disparaître du broker.</summary>
+    public static readonly string[] AnciensTopics = [Base + "/dispo", Base + "/etat"];
+
+    /// <summary>online / offline (dernière volonté) : jellyfin/&lt;id&gt;/availability.</summary>
+    public static string Dispo(string id) => $"{Base}/{id}/availability";
+
+    /// <summary>Valeur brute d'un champ : jellyfin/&lt;id&gt;/&lt;champ&gt;/state.</summary>
+    public static string EtatTopic(string id, string champ) => $"{Base}/{id}/{champ}/state";
+
+    /// <summary>Identifiant du serveur (ServerId) sans tirets, comme dans /System/Info/Public.</summary>
+    public static string Identifiant(string serverId) => serverId.Replace("-", string.Empty, System.StringComparison.Ordinal).ToLowerInvariant();
+
+    /// <summary>Valeur publiée : booléens en ON / OFF, nombres en notation invariante, textes limités à 255 caractères.</summary>
+    public static string Valeur(object? valeur) => valeur switch
+    {
+        bool b => b ? "ON" : "OFF",
+        string s => Tronquer(s),
+        _ => System.Convert.ToString(valeur, CultureInfo.InvariantCulture) ?? string.Empty,
+    };
+
+    /// <summary>Entité HA : Champ donne son topic d'état (<see cref="EtatTopic"/>) ; unique_id et topic de découverte inchangés.</summary>
     public sealed record Entite(string Composant, string Champ, string Nom, string Icone, string? Unite = null);
 
-    /// <summary>Signal de vie : état complet republié même sans changement.</summary>
+    /// <summary>Signal de vie : tous les champs republiés même sans changement.</summary>
     public const int SignalDeVie = 1800;
 
     /// <summary>Plus de deux signaux de vie sans état : HA passe les capteurs en indisponible (Jellyfin figé, MQTT encore connecté).</summary>
@@ -47,7 +65,7 @@ public static class Decouverte
 
     public static string Topic(Entite e) => $"homeassistant/{e.Composant}/{Base}/{e.Champ}/config";
 
-    public static string Config(Entite e, string version)
+    public static string Config(Entite e, string version, string id)
     {
         var conf = new Dictionary<string, object>
         {
@@ -65,16 +83,15 @@ public static class Decouverte
         if (e.Composant == "binary_sensor")
         {
             // « Serveur » : lit directement la dispo, pour rester affiché « Déconnecté » (et non indisponible) quand Jellyfin s'arrête
-            conf["state_topic"] = Dispo;
+            conf["state_topic"] = Dispo(id);
             conf["payload_on"] = "online";
             conf["payload_off"] = "offline";
             conf["device_class"] = "connectivity";
             return JsonSerializer.Serialize(conf);
         }
 
-        conf["state_topic"] = Etat;
-        conf["value_template"] = $"{{{{ value_json.{e.Champ} }}}}";
-        conf["availability_topic"] = Dispo;
+        conf["state_topic"] = EtatTopic(id, e.Champ);
+        conf["availability_topic"] = Dispo(id);
         conf["expire_after"] = ExpireApres;
         // Compteurs et mesures : historique numérique (graphiques) dans HA
         if (e.Unite is not null || e.Champ.StartsWith("bib_", System.StringComparison.Ordinal) || e.Champ == "lectures_en_cours")

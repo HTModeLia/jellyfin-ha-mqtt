@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -19,8 +18,9 @@ using MQTTnet;
 namespace Jellyfin.Plugin.HaMqtt;
 
 /// <summary>
-/// Publie l'état de Jellyfin (JSON retenu sur jellyfin/etat) : sur les événements Jellyfin (lecture, ajout)
-/// et toutes les 5 min pour les compteurs. Jellyfin arrêté ou planté = appareil « indisponible » (dernière volonté).
+/// Publie chaque champ sur son topic retenu jellyfin/&lt;id&gt;/&lt;champ&gt;/state, seulement quand il change
+/// (événements Jellyfin, compteurs recalculés toutes les 5 min), et tous les champs à chaque signal de vie.
+/// Jellyfin arrêté ou planté = jellyfin/&lt;id&gt;/availability à offline (dernière volonté).
 /// </summary>
 public sealed class PublieurMqtt : BackgroundService
 {
@@ -31,6 +31,7 @@ public sealed class PublieurMqtt : BackgroundService
     private readonly ISessionManager _sessions;
     private readonly ILogger<PublieurMqtt> _log;
     private readonly string _version;
+    private readonly string _id;
     private readonly Dictionary<string, object> _etat = new()
     {
         ["lectures_en_cours"] = 0, ["derniere_lecture"] = "", ["derniere_lecture_client"] = "", ["dernier_ajout"] = "",
@@ -39,7 +40,7 @@ public sealed class PublieurMqtt : BackgroundService
     private readonly Dictionary<string, Decouverte.Entite> _bibliotheques = new(); // champ -> entité
     private IMqttClient? _client;
     private volatile bool _reconfigurer;
-    private string? _dernierEnvoi; // dernier JSON envoyé : rien n'est republié s'il n'a pas changé
+    private readonly Dictionary<string, string> _envoye = new(); // champ -> dernière valeur publiée
     private TimeSpan _cpuPrecedent;
     private DateTime _mesurePrecedente;
 
@@ -49,6 +50,7 @@ public sealed class PublieurMqtt : BackgroundService
         _sessions = sessions;
         _log = log;
         _version = hote.ApplicationVersionString;
+        _id = Decouverte.Identifiant(hote.SystemId);
         _etat["version"] = _version;
     }
 
@@ -121,7 +123,7 @@ public sealed class PublieurMqtt : BackgroundService
         var options = new MqttClientOptionsBuilder()
             .WithTcpServer(conf.Hote.Trim(), conf.Port > 0 ? conf.Port : 1883)
             .WithClientId("jellyfin_ha_mqtt")
-            .WithWillTopic(Decouverte.Dispo).WithWillPayload("offline").WithWillRetain()
+            .WithWillTopic(Decouverte.Dispo(_id)).WithWillPayload("offline").WithWillRetain()
             .WithKeepAlivePeriod(TimeSpan.FromSeconds(60));
         if (!string.IsNullOrEmpty(conf.Utilisateur))
         {
@@ -129,12 +131,17 @@ public sealed class PublieurMqtt : BackgroundService
         }
 
         await _client.ConnectAsync(options.Build(), ct).ConfigureAwait(false);
-        foreach (var entite in Decouverte.Fixes.Concat(Bibliotheques()))
+        foreach (var ancien in Decouverte.AnciensTopics)
         {
-            await PublierAsync(Decouverte.Topic(entite), Decouverte.Config(entite, _version)).ConfigureAwait(false);
+            await PublierAsync(ancien, string.Empty).ConfigureAwait(false); // charge vide retenue = topic effacé du broker
         }
 
-        await PublierAsync(Decouverte.Dispo, "online").ConfigureAwait(false);
+        foreach (var entite in Decouverte.Fixes.Concat(Bibliotheques()))
+        {
+            await PublierAsync(Decouverte.Topic(entite), Decouverte.Config(entite, _version, _id)).ConfigureAwait(false);
+        }
+
+        await PublierAsync(Decouverte.Dispo(_id), "online").ConfigureAwait(false);
         await PublierEtatAsync(forcer: true).ConfigureAwait(false);
         _log.LogInformation("[MQTT] Connecté à {Hote}, appareil publié pour Home Assistant", conf.Hote);
     }
@@ -150,7 +157,7 @@ public sealed class PublieurMqtt : BackgroundService
         {
             if (_client.IsConnected)
             {
-                await PublierAsync(Decouverte.Dispo, "offline").ConfigureAwait(false);
+                await PublierAsync(Decouverte.Dispo(_id), "offline").ConfigureAwait(false);
                 await _client.DisconnectAsync().ConfigureAwait(false);
             }
         }
@@ -175,18 +182,27 @@ public sealed class PublieurMqtt : BackgroundService
         return true;
     }
 
-    /// <summary>Publie l'état seulement s'il a changé depuis le dernier envoi, sauf <paramref name="forcer"/> (connexion, signal de vie).</summary>
+    /// <summary>Publie les champs dont la valeur a changé depuis le dernier envoi, ou tous avec <paramref name="forcer"/> (connexion, signal de vie).</summary>
     private async Task PublierEtatAsync(bool forcer = false)
     {
-        string json;
+        List<KeyValuePair<string, string>> aEnvoyer;
         lock (_etat)
         {
-            json = JsonSerializer.Serialize(_etat);
+            aEnvoyer = _etat.Select(c => KeyValuePair.Create(c.Key, Decouverte.Valeur(c.Value)))
+                // valeur vide (rien lu ni ajouté depuis le démarrage) : on garde la valeur retenue sur le broker
+                .Where(c => c.Value.Length > 0 && (forcer || !_envoye.TryGetValue(c.Key, out var avant) || avant != c.Value))
+                .ToList();
         }
 
-        if ((forcer || json != _dernierEnvoi) && await PublierAsync(Decouverte.Etat, json).ConfigureAwait(false))
+        foreach (var (champ, valeur) in aEnvoyer)
         {
-            _dernierEnvoi = json;
+            if (await PublierAsync(Decouverte.EtatTopic(_id, champ), valeur).ConfigureAwait(false))
+            {
+                lock (_etat)
+                {
+                    _envoye[champ] = valeur;
+                }
+            }
         }
     }
 
@@ -199,7 +215,7 @@ public sealed class PublieurMqtt : BackgroundService
             {
                 foreach (var (champ, valeur) in champs)
                 {
-                    _etat[champ] = valeur is string s ? Decouverte.Tronquer(s) : valeur;
+                    _etat[champ] = valeur;
                 }
             }
 
@@ -291,12 +307,18 @@ public sealed class PublieurMqtt : BackgroundService
 
         foreach (var entite in nouvelles)
         {
-            await PublierAsync(Decouverte.Topic(entite), Decouverte.Config(entite, _version)).ConfigureAwait(false);
+            await PublierAsync(Decouverte.Topic(entite), Decouverte.Config(entite, _version, _id)).ConfigureAwait(false);
         }
 
         foreach (var entite in retirees)
         {
             await PublierAsync(Decouverte.Topic(entite), string.Empty).ConfigureAwait(false); // config vide = entité supprimée dans HA
+            await PublierAsync(Decouverte.EtatTopic(_id, entite.Champ), string.Empty).ConfigureAwait(false);
+            lock (_etat)
+            {
+                _etat.Remove(entite.Champ);
+                _envoye.Remove(entite.Champ);
+            }
         }
 
         // CPU : moyenne sur l'intervalle, ramenée à 100 % pour tous les cœurs
