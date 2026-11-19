@@ -58,6 +58,8 @@ Tests (logique de découverte, sans broker) : `dotnet test`.
 Publier une version : changer `<Version>` dans `Directory.Build.props` (et `build.yaml`), puis `.\empaqueter.ps1 -UrlZip https://github.com/HTModeLia/jellyfin-ha-mqtt/releases/download/v<version>/jellyfin-ha-mqtt_<version>.zip`,
 copier `dist\manifest.json` à la racine, commiter, pousser, puis créer la release `v<version>` avec **ce** zip
 (`dist\jellyfin-ha-mqtt_<version>.zip`) : relancer le script change la somme MD5 du zip.
+Les releases du dépôt sont immuables : créer la release en **brouillon**, y joindre le zip, puis la publier (une
+release publiée n'accepte plus de fichier, et son tag ne peut plus resservir). La 1.2.0.0 est sous le tag `1.2.0.0`.
 
 ### Dépôt d'extensions hébergé ailleurs
 
