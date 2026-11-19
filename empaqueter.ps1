@@ -26,6 +26,7 @@ $manifest = @(
         description = "Appareil « Jellyfin » dans Home Assistant (découverte MQTT) : compteurs par bibliothèque, lectures en cours, dernière lecture, dernier ajout, CPU et RAM."
         owner       = "aurelien"
         category    = "General"
+        imageUrl    = "https://raw.githubusercontent.com/HTModeLia/jellyfin-ha-mqtt/main/image.png"
         versions    = @(
             [ordered]@{
                 version   = $version
