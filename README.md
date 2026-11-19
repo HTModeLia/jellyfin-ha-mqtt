@@ -38,7 +38,17 @@ Tests (logique de découverte, sans broker) : `dotnet test`.
    - Windows : `%ProgramData%\Jellyfin\Server\plugins\`.
 2. Redémarrer Jellyfin. L'extension apparaît dans *Tableau de bord → Extensions*.
 
-### Dépôt d'extensions
+### Depuis le tableau de bord (dépôt GitHub)
+
+1. *Tableau de bord → Extensions → Dépôts → +* : nom « Home Assistant MQTT », URL
+   `https://raw.githubusercontent.com/HTModeLia/jellyfin-ha-mqtt/main/manifest.json`
+2. *Catalogue* → « Home Assistant MQTT » → Installer, puis redémarrer Jellyfin.
+
+Publier une version : `.\empaqueter.ps1 -UrlZip https://github.com/HTModeLia/jellyfin-ha-mqtt/releases/download/v<version>/jellyfin-ha-mqtt_<version>.zip`,
+copier `dist\manifest.json` à la racine, commiter, pousser, puis créer la release `v<version>` avec **ce** zip
+(`dist\jellyfin-ha-mqtt_<version>.zip`) : relancer le script change la somme MD5 du zip.
+
+### Dépôt d'extensions hébergé ailleurs
 
 1. Servir `jellyfin-ha-mqtt_1.0.0.0.zip` et `manifest.json` sur un serveur web joignable par Jellyfin.
 2. Régénérer le manifest avec la bonne adresse du zip (la somme MD5 y est recalculée) :
