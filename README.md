@@ -4,10 +4,13 @@ Publie un appareil **« Jellyfin »** dans Home Assistant par MQTT, avec la déc
 HA crée tout seul l'appareil et ses capteurs, sans YAML ni polling. Indépendant du proxy de streaming.
 
 - Messages de découverte retenus sur `homeassistant/sensor/jellyfin/<champ>/config`.
-- État : un JSON retenu sur `jellyfin/etat`, publié à chaque événement Jellyfin (lecture, arrêt, ajout)
-  et toutes les 5 minutes pour les compteurs, le CPU et la RAM.
+- État : un JSON retenu sur `jellyfin/etat`, publié **seulement quand il change** (lecture, arrêt, ajout, ou
+  compteurs recalculés en local toutes les 5 minutes et différents du dernier envoi).
+- Signal de vie : l'état complet est republié toutes les 30 minutes, même sans changement. Les capteurs ont
+  `expire_after` = 4000 s : si Jellyfin se fige sans couper la connexion MQTT, HA les passe en indisponible.
 - Disponibilité : `jellyfin/dispo` = `online` à la connexion ; `offline` (message de dernière volonté, retenu)
-  si Jellyfin s'arrête ou plante. Reconnexion automatique toutes les 10 secondes si le broker tombe.
+  si Jellyfin s'arrête ou plante. Keepalive MQTT de 60 s. Reconnexion automatique toutes les 10 secondes si le
+  broker tombe.
 
 Cible : **Jellyfin 12.4.0** (.NET 10, `targetAbi` 12.4.0.0).
 
@@ -62,6 +65,8 @@ prévoir un compte Mosquitto dédié.
 
 | Capteur                    | Champ                     | Mise à jour                      |
 |----------------------------|---------------------------|----------------------------------|
+| Serveur (connectivité)     | `serveur`                 | `jellyfin/dispo` (online/offline)|
+| Version                    | `version`                 | au démarrage                     |
 | *Nom de la bibliothèque*   | `bib_<nom>`               | toutes les 5 min                 |
 | Lectures en cours          | `lectures_en_cours`       | lecture, arrêt, 5 min            |
 | Dernière lecture           | `derniere_lecture`        | début de lecture                 |
@@ -77,5 +82,8 @@ prévoir un compte Mosquitto dédié.
 - **Dernière lecture** : « Série - Épisode » pour un épisode ; le client indique « Application (Appareil) - Utilisateur ».
 - **Dernier ajout** : films, épisodes, séries, musiques, livres (pas les saisons ni les dossiers). Pendant une
   première analyse complète, le capteur défile au rythme des ajouts.
-- **CPU** : part du processus Jellyfin sur l'ensemble des cœurs (100 % = tous les cœurs pleins) ; absent au premier relevé.
+- **Serveur** : « Connecté » / « Déconnecté » ; reste lisible quand Jellyfin est arrêté (il ne devient pas indisponible).
+  La version figure aussi dans la fiche de l'appareil (`sw_version`).
+- **CPU** : part du processus Jellyfin sur l'ensemble des cœurs (100 % = tous les cœurs pleins), arrondie à 1 % ;
+  absent au premier relevé. **RAM** arrondie à 10 Mo. Ces arrondis évitent d'envoyer un état pour un écart insignifiant.
 - Les états texte sont limités à 255 caractères (limite de HA).

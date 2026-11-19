@@ -39,6 +39,7 @@ public sealed class PublieurMqtt : BackgroundService
     private readonly Dictionary<string, Decouverte.Entite> _bibliotheques = new(); // champ -> entité
     private IMqttClient? _client;
     private volatile bool _reconfigurer;
+    private string? _dernierEnvoi; // dernier JSON envoyé : rien n'est republié s'il n'a pas changé
     private TimeSpan _cpuPrecedent;
     private DateTime _mesurePrecedente;
 
@@ -48,6 +49,7 @@ public sealed class PublieurMqtt : BackgroundService
         _sessions = sessions;
         _log = log;
         _version = hote.ApplicationVersionString;
+        _etat["version"] = _version;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -57,6 +59,7 @@ public sealed class PublieurMqtt : BackgroundService
         _bibliotheque.ItemAdded += SurAjout;
         Plugin.Instance!.ConfigurationChanged += SurReglages;
         var prochainComptage = DateTime.MinValue;
+        var prochainSignal = DateTime.UtcNow + TimeSpan.FromSeconds(Decouverte.SignalDeVie);
         try
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -79,6 +82,12 @@ public sealed class PublieurMqtt : BackgroundService
                     {
                         prochainComptage = DateTime.UtcNow + Intervalle;
                         await CompterAsync().ConfigureAwait(false);
+                    }
+
+                    if (DateTime.UtcNow >= prochainSignal)
+                    {
+                        prochainSignal = DateTime.UtcNow + TimeSpan.FromSeconds(Decouverte.SignalDeVie);
+                        await PublierEtatAsync(forcer: true).ConfigureAwait(false);
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -112,7 +121,8 @@ public sealed class PublieurMqtt : BackgroundService
         var options = new MqttClientOptionsBuilder()
             .WithTcpServer(conf.Hote.Trim(), conf.Port > 0 ? conf.Port : 1883)
             .WithClientId("jellyfin_ha_mqtt")
-            .WithWillTopic(Decouverte.Dispo).WithWillPayload("offline").WithWillRetain();
+            .WithWillTopic(Decouverte.Dispo).WithWillPayload("offline").WithWillRetain()
+            .WithKeepAlivePeriod(TimeSpan.FromSeconds(60));
         if (!string.IsNullOrEmpty(conf.Utilisateur))
         {
             options.WithCredentials(conf.Utilisateur, conf.MotDePasse);
@@ -125,7 +135,7 @@ public sealed class PublieurMqtt : BackgroundService
         }
 
         await PublierAsync(Decouverte.Dispo, "online").ConfigureAwait(false);
-        await PublierEtatAsync().ConfigureAwait(false);
+        await PublierEtatAsync(forcer: true).ConfigureAwait(false);
         _log.LogInformation("[MQTT] Connecté à {Hote}, appareil publié pour Home Assistant", conf.Hote);
     }
 
@@ -153,16 +163,20 @@ public sealed class PublieurMqtt : BackgroundService
         _client = null;
     }
 
-    private async Task PublierAsync(string topic, string contenu)
+    private async Task<bool> PublierAsync(string topic, string contenu)
     {
-        if (_client is { IsConnected: true })
+        if (_client is not { IsConnected: true })
         {
-            var message = new MqttApplicationMessageBuilder().WithTopic(topic).WithPayload(contenu).WithRetainFlag().Build();
-            await _client.PublishAsync(message).ConfigureAwait(false);
+            return false;
         }
+
+        var message = new MqttApplicationMessageBuilder().WithTopic(topic).WithPayload(contenu).WithRetainFlag().Build();
+        await _client.PublishAsync(message).ConfigureAwait(false);
+        return true;
     }
 
-    private Task PublierEtatAsync()
+    /// <summary>Publie l'état seulement s'il a changé depuis le dernier envoi, sauf <paramref name="forcer"/> (connexion, signal de vie).</summary>
+    private async Task PublierEtatAsync(bool forcer = false)
     {
         string json;
         lock (_etat)
@@ -170,7 +184,10 @@ public sealed class PublieurMqtt : BackgroundService
             json = JsonSerializer.Serialize(_etat);
         }
 
-        return PublierAsync(Decouverte.Etat, json);
+        if ((forcer || json != _dernierEnvoi) && await PublierAsync(Decouverte.Etat, json).ConfigureAwait(false))
+        {
+            _dernierEnvoi = json;
+        }
     }
 
     /// <summary>Met à jour des champs de l'état puis le publie (appelé depuis les événements Jellyfin).</summary>
@@ -289,12 +306,12 @@ public sealed class PublieurMqtt : BackgroundService
         {
             var cpu = (processus.TotalProcessorTime - _cpuPrecedent).TotalMilliseconds
                       / (maintenant - _mesurePrecedente).TotalMilliseconds / Environment.ProcessorCount * 100;
-            champs.Add(("cpu", Math.Round(cpu, 1)));
+            champs.Add(("cpu", Math.Round(cpu))); // arrondis : pas de publication pour un écart insignifiant
         }
 
         _cpuPrecedent = processus.TotalProcessorTime;
         _mesurePrecedente = maintenant;
-        champs.Add(("ram", processus.WorkingSet64 / (1024 * 1024)));
+        champs.Add(("ram", processus.WorkingSet64 / (10 * 1024 * 1024) * 10)); // à 10 Mo près
         Signaler(champs.ToArray());
     }
 }

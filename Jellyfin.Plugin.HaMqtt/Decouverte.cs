@@ -17,8 +17,16 @@ public static class Decouverte
     /// <summary>Entité HA : Champ est la clé du JSON publié sur <see cref="Etat"/>.</summary>
     public sealed record Entite(string Composant, string Champ, string Nom, string Icone, string? Unite = null);
 
+    /// <summary>Signal de vie : état complet republié même sans changement.</summary>
+    public const int SignalDeVie = 1800;
+
+    /// <summary>Plus de deux signaux de vie sans état : HA passe les capteurs en indisponible (Jellyfin figé, MQTT encore connecté).</summary>
+    public const int ExpireApres = 4000;
+
     public static readonly Entite[] Fixes =
     [
+        new("binary_sensor", "serveur", "Serveur", "mdi:server-network"),
+        new("sensor", "version", "Version", "mdi:information-outline"),
         new("sensor", "lectures_en_cours", "Lectures en cours", "mdi:play-network"),
         new("sensor", "derniere_lecture", "Dernière lecture", "mdi:play-circle"),
         new("sensor", "derniere_lecture_client", "Dernière lecture (client)", "mdi:cellphone-play"),
@@ -45,9 +53,6 @@ public static class Decouverte
         {
             ["name"] = e.Nom,
             ["unique_id"] = $"{Base}_{e.Champ}",
-            ["state_topic"] = Etat,
-            ["value_template"] = $"{{{{ value_json.{e.Champ} }}}}",
-            ["availability_topic"] = Dispo,
             ["icon"] = e.Icone,
             ["device"] = new Dictionary<string, object>
             {
@@ -57,6 +62,20 @@ public static class Decouverte
                 ["sw_version"] = version,
             },
         };
+        if (e.Composant == "binary_sensor")
+        {
+            // « Serveur » : lit directement la dispo, pour rester affiché « Déconnecté » (et non indisponible) quand Jellyfin s'arrête
+            conf["state_topic"] = Dispo;
+            conf["payload_on"] = "online";
+            conf["payload_off"] = "offline";
+            conf["device_class"] = "connectivity";
+            return JsonSerializer.Serialize(conf);
+        }
+
+        conf["state_topic"] = Etat;
+        conf["value_template"] = $"{{{{ value_json.{e.Champ} }}}}";
+        conf["availability_topic"] = Dispo;
+        conf["expire_after"] = ExpireApres;
         // Compteurs et mesures : historique numérique (graphiques) dans HA
         if (e.Unite is not null || e.Champ.StartsWith("bib_", System.StringComparison.Ordinal) || e.Champ == "lectures_en_cours")
         {

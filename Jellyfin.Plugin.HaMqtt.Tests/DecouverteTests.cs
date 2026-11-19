@@ -18,6 +18,7 @@ public class DecouverteTests
         Assert.Equal("{{ value_json.derniere_lecture }}", conf.GetProperty("value_template").GetString());
         Assert.Equal("jellyfin/dispo", conf.GetProperty("availability_topic").GetString());
         Assert.False(conf.TryGetProperty("state_class", out _)); // texte : pas d'historique numérique
+        Assert.Equal(4000, conf.GetProperty("expire_after").GetInt32());
 
         var appareil = conf.GetProperty("device");
         Assert.Equal("jellyfin", appareil.GetProperty("identifiers")[0].GetString());
@@ -52,5 +53,32 @@ public class DecouverteTests
         Assert.Equal(255, Decouverte.Tronquer(new string('a', 300)).Length);
         Assert.Equal("court", Decouverte.Tronquer("court"));
         Assert.Equal("", Decouverte.Tronquer(null));
+    }
+}
+
+public class ServeurEtVersionTests
+{
+    [Fact]
+    public void Serveur_lit_la_dispo_sans_expiration()
+    {
+        var entite = Decouverte.Fixes.Single(e => e.Champ == "serveur");
+        Assert.Equal("homeassistant/binary_sensor/jellyfin/serveur/config", Decouverte.Topic(entite));
+
+        var conf = JsonDocument.Parse(Decouverte.Config(entite, "12.4.0")).RootElement;
+        Assert.Equal("jellyfin/dispo", conf.GetProperty("state_topic").GetString());
+        Assert.Equal("online", conf.GetProperty("payload_on").GetString());
+        Assert.Equal("offline", conf.GetProperty("payload_off").GetString());
+        Assert.Equal("connectivity", conf.GetProperty("device_class").GetString());
+        // Doit afficher « Déconnecté » quand Jellyfin est arrêté, pas « indisponible »
+        Assert.False(conf.TryGetProperty("availability_topic", out _));
+        Assert.False(conf.TryGetProperty("expire_after", out _));
+    }
+
+    [Fact]
+    public void Version_lit_l_etat_et_expire_apres_deux_signaux_de_vie()
+    {
+        var conf = JsonDocument.Parse(Decouverte.Config(Decouverte.Fixes.Single(e => e.Champ == "version"), "12.4.0")).RootElement;
+        Assert.Equal("{{ value_json.version }}", conf.GetProperty("value_template").GetString());
+        Assert.True(Decouverte.ExpireApres > 2 * Decouverte.SignalDeVie);
     }
 }
